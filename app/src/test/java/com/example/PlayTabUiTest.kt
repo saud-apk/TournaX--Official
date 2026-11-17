@@ -1,6 +1,9 @@
 package com.example
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -195,5 +198,149 @@ class PlayTabUiTest {
         composeRule.onNodeWithText("Rival_Viper").assertIsDisplayed()
         composeRule.onNodeWithTag("joined_member_row_u1").assertIsDisplayed()
         composeRule.onNodeWithText("YOU").assertIsDisplayed()
+    }
+
+    @Test
+    fun joiningMatch_displaysCongratulationsPopupWithSlotAndActions() {
+        val profile = PlayerProfile(
+            userId = "u1",
+            fullName = "Aarav Sharma",
+            phone = "9876543210",
+            freeFireUid = "1234567890",
+            freeFireIgn = "TX_Aarav",
+            walletDeposit = 100L,
+            walletWinning = 50L,
+        )
+        val match1 = Tournament(
+            id = "real_match_1",
+            title = "TournaX Bermuda Cup",
+            mode = "BR Solo",
+            mapName = "Bermuda",
+            dateTimeLabel = "Tonight • 9:00 PM IST",
+            status = "upcoming",
+            entryFee = 20L,
+            prizePool = 500L,
+            perKill = 5L,
+            prizeFirst = 300L,
+            prizeSecond = 120L,
+            prizeThird = 80L,
+            maxSlots = 48L,
+            filledSlots = 12L,
+            slotUnitLabel = "Players",
+            rulesSummary = "Mobile only.",
+            roomUnlocked = false,
+        )
+        var myTournamentsOpened = false
+
+        composeRule.setContent {
+            TournaXTheme {
+                PlayTabScreen(
+                    profile = profile,
+                    tournaments = listOf(match1),
+                    registrations = emptyList(),
+                    isBusy = false,
+                    onJoinTournament = { _, _, onJoined ->
+                        onJoined(7L)
+                    },
+                    onGoToWallet = {},
+                    onCopied = {},
+                    onOpenMyTournaments = { myTournamentsOpened = true },
+                )
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        // Open featured tournament detail and click Join
+        composeRule.onNodeWithTag("featured_tournament_banner").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("confirm_join_tournament_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        // Congratulations popup must appear with confirmed slot badge and quick actions
+        composeRule.onNodeWithTag("match_joined_congrats_dialog").assertIsDisplayed()
+        composeRule.onNodeWithText("ENTRY CONFIRMED").assertIsDisplayed()
+        composeRule.onNodeWithText("CONGRATULATIONS!").assertIsDisplayed()
+        composeRule.onNodeWithTag("congrats_slot_badge").assertIsDisplayed()
+        composeRule.onNodeWithText("SLOT #7").assertIsDisplayed()
+        composeRule.onNodeWithText("TX_Aarav").performScrollTo().assertIsDisplayed()
+        composeRule.onNode(
+            hasText("500 Pts") and hasAnyAncestor(hasTestTag("match_joined_congrats_dialog")),
+        ).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("congrats_view_room_button").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("congrats_my_matches_button").performScrollTo().assertIsDisplayed()
+
+        // Tapping "View Room & Slot" closes congrats dialog and keeps tournament detail visible
+        composeRule.onNodeWithTag("congrats_view_room_button").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("match_joined_congrats_dialog").assertDoesNotExist()
+        composeRule.onNodeWithTag("match_tab_description").assertIsDisplayed()
+
+        // Trigger join again and tap "Open My Tournaments"
+        composeRule.onNodeWithTag("confirm_join_tournament_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("congrats_my_matches_button").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        assert(myTournamentsOpened)
+        composeRule.onNodeWithTag("match_joined_congrats_dialog").assertDoesNotExist()
+    }
+
+    @Test
+    fun freeMatchesSection_displaysSquareCardAfterLoneWolfAndFiltersZeroEntryMatches() {
+        val profile = PlayerProfile(
+            userId = "u1",
+            fullName = "Aarav Sharma",
+            freeFireUid = "1234567890",
+            freeFireIgn = "TX_Aarav",
+        )
+        val paidMatch = Tournament(
+            id = "paid_match_1",
+            title = "Paid Pro Scrim",
+            mode = "BR Squad",
+            mapName = "Bermuda",
+            dateTimeLabel = "8:00 PM IST",
+            status = "upcoming",
+            entryFee = 25L,
+            prizePool = 500L,
+            maxSlots = 12L,
+            filledSlots = 4L,
+        )
+        val freeMatch = Tournament(
+            id = "free_match_1",
+            title = "Free Sunday Showdown",
+            mode = "CS 4v4",
+            mapName = "Kalahari",
+            dateTimeLabel = "9:30 PM IST",
+            status = "upcoming",
+            entryFee = 0L,
+            prizePool = 250L,
+            maxSlots = 16L,
+            filledSlots = 6L,
+        )
+
+        composeRule.setContent {
+            TournaXTheme {
+                PlayTabScreen(
+                    profile = profile,
+                    tournaments = listOf(paidMatch, freeMatch),
+                    registrations = emptyList(),
+                    isBusy = false,
+                    onJoinTournament = { _, _, _ -> },
+                    onGoToWallet = {},
+                    onCopied = {},
+                )
+            }
+        }
+
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithTag("mode_card_lone_wolf").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithTag("mode_card_free_matches").performScrollTo().assertIsDisplayed().performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("FREE MATCHES").assertIsDisplayed()
+        composeRule.onNodeWithText("Zero Entry Fee").assertIsDisplayed()
+        composeRule.onNodeWithTag("tournament_cta_free_match_1").assertIsDisplayed()
+        composeRule.onNodeWithTag("tournament_cta_paid_match_1").assertDoesNotExist()
     }
 }

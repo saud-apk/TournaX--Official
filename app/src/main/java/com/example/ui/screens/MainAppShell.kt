@@ -317,7 +317,7 @@ fun MainAppShell(
                                 captainUid = profile.freeFireUid,
                                 captainIgn = profile.freeFireIgn,
                                 teammateUids = teammateUids,
-                                onJoined = { onJoined() },
+                                onJoined = { slot -> onJoined(slot) },
                             )
                         },
                         onGoToWallet = { selectedTab = MainTab.WALLET },

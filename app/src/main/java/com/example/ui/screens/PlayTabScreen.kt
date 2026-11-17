@@ -77,6 +77,7 @@ import com.example.data.model.Tournament
 import com.example.data.model.TournamentParticipant
 import com.example.data.model.TournamentRegistration
 import com.example.data.model.TournamentResultEntry
+import com.example.ui.components.MatchJoinedCongratulationsDialog
 import com.example.ui.components.TournaXBadge
 import com.example.ui.components.TournaXCard
 import com.example.ui.components.TournamentDetailDialog
@@ -133,13 +134,21 @@ private enum class ArenaModeCategory(
         subtitle = "1v1 Showdown",
         drawableRes = R.drawable.mode_lone_wolf,
     ),
+    FREE_MATCHES(
+        id = "free_matches",
+        title = "FREE MATCHES",
+        subtitle = "Zero Entry Fee",
+        drawableRes = R.drawable.mode_free_matches,
+    ),
 }
 
-private fun matchesCategory(mode: String, category: ArenaModeCategory): Boolean {
+private fun matchesCategory(tournament: Tournament, category: ArenaModeCategory): Boolean {
     if (category == ArenaModeCategory.ALL) return true
-    val m = mode.trim().lowercase(Locale.US)
+    if (category == ArenaModeCategory.FREE_MATCHES) return tournament.entryFee <= 0L
+    val m = tournament.mode.trim().lowercase(Locale.US)
     return when (category) {
         ArenaModeCategory.ALL -> true
+        ArenaModeCategory.FREE_MATCHES -> tournament.entryFee <= 0L
         ArenaModeCategory.CS -> m == "cs" || m.startsWith("cs ") || m.contains("clash")
         ArenaModeCategory.LONE_WOLF -> m == "lw" || m.contains("lone") || m.contains("1v1")
         ArenaModeCategory.BR -> m == "br" || m.startsWith("br ") || m.contains("battle royale") ||
@@ -161,7 +170,7 @@ fun PlayTabScreen(
     tournaments: List<Tournament>,
     registrations: List<TournamentRegistration>,
     isBusy: Boolean,
-    onJoinTournament: (Tournament, List<String>, () -> Unit) -> Unit,
+    onJoinTournament: (Tournament, List<String>, (Long) -> Unit) -> Unit,
     onGoToWallet: () -> Unit,
     onCopied: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -174,6 +183,7 @@ fun PlayTabScreen(
     var selectedStatus by remember { mutableStateOf("upcoming") }
     var selectedFormat by remember { mutableStateOf("All") }
     var activeTournament by remember { mutableStateOf<Tournament?>(null) }
+    var joinedCelebration by remember { mutableStateOf<Pair<Tournament, Long>?>(null) }
 
     val totalPlayablePts = remember(profile.walletDeposit, profile.points, profile.walletWinning) {
         profile.walletDeposit + profile.points + profile.walletWinning
@@ -196,7 +206,7 @@ fun PlayTabScreen(
     }
 
     val openCategory: (ArenaModeCategory) -> Unit = { category ->
-        val modeItems = tournaments.filter { matchesCategory(it.mode, category) }
+        val modeItems = tournaments.filter { matchesCategory(it, category) }
         val hasLive = modeItems.any { it.status.equals("live", ignoreCase = true) }
         val hasUpcoming = modeItems.any { it.status.equals("upcoming", ignoreCase = true) }
         selectedStatus = when {
@@ -421,7 +431,7 @@ fun PlayTabScreen(
                     ModeSquareCard(
                         category = ArenaModeCategory.BR,
                         matches = remember(tournaments) {
-                            tournaments.filter { matchesCategory(it.mode, ArenaModeCategory.BR) }
+                            tournaments.filter { matchesCategory(it, ArenaModeCategory.BR) }
                         },
                         onClick = { openCategory(ArenaModeCategory.BR) },
                         modifier = Modifier.weight(1f),
@@ -429,14 +439,14 @@ fun PlayTabScreen(
                     ModeSquareCard(
                         category = ArenaModeCategory.CS,
                         matches = remember(tournaments) {
-                            tournaments.filter { matchesCategory(it.mode, ArenaModeCategory.CS) }
+                            tournaments.filter { matchesCategory(it, ArenaModeCategory.CS) }
                         },
                         onClick = { openCategory(ArenaModeCategory.CS) },
                         modifier = Modifier.weight(1f),
                     )
                 }
 
-                // Row 2: Lone Wolf & All Matches Hub Card
+                // Row 2: Lone Wolf & Free Matches Square Cards
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -444,17 +454,27 @@ fun PlayTabScreen(
                     ModeSquareCard(
                         category = ArenaModeCategory.LONE_WOLF,
                         matches = remember(tournaments) {
-                            tournaments.filter { matchesCategory(it.mode, ArenaModeCategory.LONE_WOLF) }
+                            tournaments.filter { matchesCategory(it, ArenaModeCategory.LONE_WOLF) }
                         },
                         onClick = { openCategory(ArenaModeCategory.LONE_WOLF) },
                         modifier = Modifier.weight(1f),
                     )
-                    AllMatchesHubCard(
-                        tournaments = tournaments,
-                        onClick = { openCategory(ArenaModeCategory.ALL) },
+                    ModeSquareCard(
+                        category = ArenaModeCategory.FREE_MATCHES,
+                        matches = remember(tournaments) {
+                            tournaments.filter { matchesCategory(it, ArenaModeCategory.FREE_MATCHES) }
+                        },
+                        onClick = { openCategory(ArenaModeCategory.FREE_MATCHES) },
                         modifier = Modifier.weight(1f),
                     )
                 }
+
+                // Row 3: All Lobbies Wide Hub Card
+                AllMatchesHubCard(
+                    tournaments = tournaments,
+                    onClick = { openCategory(ArenaModeCategory.ALL) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
 
                 // Pro Fair-Play Guarantee Strip
                 Surface(
@@ -485,7 +505,7 @@ fun PlayTabScreen(
             }
         } else {
             val categoryTournaments = remember(tournaments, currentCategory) {
-                tournaments.filter { matchesCategory(it.mode, currentCategory) }
+                tournaments.filter { matchesCategory(it, currentCategory) }
             }
             val upcomingCount = remember(categoryTournaments) {
                 categoryTournaments.count { it.status.equals("upcoming", ignoreCase = true) }
@@ -751,8 +771,8 @@ fun PlayTabScreen(
             isBusy = isBusy,
             onDismiss = { activeTournament = null },
             onJoin = { teammateUids ->
-                onJoinTournament(selectedDetail, teammateUids) {
-                    // keep dialog open so player sees slot & room status immediately
+                onJoinTournament(selectedDetail, teammateUids) { confirmedSlot ->
+                    joinedCelebration = selectedDetail to confirmedSlot
                 }
             },
             onGoToWallet = {
@@ -762,6 +782,26 @@ fun PlayTabScreen(
             onCopied = onCopied,
             results = matchResults,
             participants = matchParticipants,
+        )
+    }
+
+    joinedCelebration?.let { (joinedMatch, slotNum) ->
+        val latestMatch = tournaments.find { it.id == joinedMatch.id } ?: joinedMatch
+        MatchJoinedCongratulationsDialog(
+            tournament = latestMatch,
+            slotNumber = slotNum,
+            profile = profile,
+            onViewRoomAndSlot = {
+                joinedCelebration = null
+            },
+            onGoToMyMatches = {
+                joinedCelebration = null
+                activeTournament = null
+                onOpenMyTournaments()
+            },
+            onDismiss = {
+                joinedCelebration = null
+            },
         )
     }
 }
@@ -1125,14 +1165,14 @@ private fun AllMatchesHubCard(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val cardAspect = if (maxWidth > 260.dp) 1.32f else 1f
+            val cardHeight = if (maxWidth > 520.dp) 144.dp else 118.dp
             Surface(
                 color = ObsidianCard,
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(1.dp, ObsidianBorderBright),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(cardAspect)
+                    .height(cardHeight)
                     .clip(RoundedCornerShape(12.dp))
                     .clickable(onClick = onClick)
                     .testTag("mode_card_all"),
@@ -1166,7 +1206,7 @@ private fun AllMatchesHubCard(
                     border = BorderStroke(1.dp, ObsidianBorderBright),
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp),
+                        .padding(10.dp),
                 ) {
                     Text(
                         text = "$activeCount ACTIVE",
@@ -1175,28 +1215,28 @@ private fun AllMatchesHubCard(
                             fontWeight = FontWeight.Bold,
                             fontSize = 10.sp,
                         ),
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
 
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(11.dp),
+                        .padding(14.dp),
                 ) {
                     Text(
                         text = "ALL LOBBIES",
                         style = MaterialTheme.typography.titleMedium.copy(
                             color = Color.White,
                             fontWeight = FontWeight.ExtraBold,
-                            fontSize = 15.sp,
+                            fontSize = 16.sp,
                         ),
                     )
                     Text(
-                        text = "BR • CS • Lone Wolf",
+                        text = "BR • CS • Lone Wolf • Free Matches",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MetallicSilverDim,
-                            fontSize = 10.sp,
+                            fontSize = 11.sp,
                         ),
                     )
                 }
