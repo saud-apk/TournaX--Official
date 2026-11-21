@@ -1,0 +1,113 @@
+{
+  "project_info": {
+    "project_number": "596340328863",
+    "project_id": "itztournax",
+    "storage_bucket": "itztournax.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:596340328863:android:07679d04a35a12f9f2d5aa",
+        "android_client_info": {
+          "package_name": "com.aistudio.tournax.kxmpzq"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "596340328863-8nuil626f3usukkhobqsf83nk3aj8j82.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAe0-OSY_qdZnKJgR6Dba15g_HWjTCL0iU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "596340328863-8nuil626f3usukkhobqsf83nk3aj8j82.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:596340328863:android:44068f57e31aeee0f2d5aa",
+        "android_client_info": {
+          "package_name": "com.officialtournax"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "596340328863-trnmbd8s6g3p7o2btiirm64c8o4vgd02.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.officialtournax",
+            "certificate_hash": "d4653b16d6234d31e8ed87634b41b07e3e6374d9"
+          }
+        },
+        {
+          "client_id": "596340328863-8nuil626f3usukkhobqsf83nk3aj8j82.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAe0-OSY_qdZnKJgR6Dba15g_HWjTCL0iU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "596340328863-8nuil626f3usukkhobqsf83nk3aj8j82.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:596340328863:android:0f5da2c961241b9ef2d5aa",
+        "android_client_info": {
+          "package_name": "com.officialtournax.mppeap"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "596340328863-ltnm7n1spf57sqpo6nujku8k3qf26l7v.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.officialtournax.mppeap",
+            "certificate_hash": "82599ca7783cfc15ca7ea7a0fb8f3729dbeb5827"
+          }
+        },
+        {
+          "client_id": "596340328863-8nuil626f3usukkhobqsf83nk3aj8j82.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAe0-OSY_qdZnKJgR6Dba15g_HWjTCL0iU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "596340328863-8nuil626f3usukkhobqsf83nk3aj8j82.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,8 @@
+{
+  "name": "TournaX",
+  "description": "Indian Free Fire Esports Tournament app with Firebase Auth, Cloud Firestore, and fair-play verification.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

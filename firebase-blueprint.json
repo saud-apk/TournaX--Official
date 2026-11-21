@@ -1,0 +1,411 @@
+{
+  "entities": {
+    "PlayerProfile": {
+      "title": "PlayerProfile",
+      "description": "Verified TournaX Indian Free Fire player profile tied to Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Authentication UID." },
+        "fullName": { "type": "string", "description": "Player's legal full name." },
+        "phone": { "type": "string", "description": "10-digit Indian mobile number." },
+        "freeFireUid": { "type": "string", "description": "Locked 8-12 digit Free Fire UID." },
+        "freeFireIgn": { "type": "string", "description": "Free Fire In-Game Name." },
+        "termsAccepted": { "type": "boolean", "description": "18+ & Fair Play terms acceptance." },
+        "termsVersion": { "type": "string", "description": "Legal terms version." },
+        "verificationMethod": { "type": "string", "description": "Authentication verification method." },
+        "level": { "type": "integer", "description": "Player arena level (starts at 1)." },
+        "xp": { "type": "integer", "description": "Player XP progress (starts at 0)." },
+        "points": { "type": "integer", "description": "TournaX reward points (starts strictly at 0, earned via tournaments or daily spin)." },
+        "totalTournaments": { "type": "integer", "description": "Total joined tournaments." },
+        "totalKills": { "type": "integer", "description": "Lifetime recorded kills." },
+        "booyahs": { "type": "integer", "description": "Lifetime Booyahs." },
+        "avatarIndex": { "type": "integer", "description": "Selected gamer avatar index (0-3)." },
+        "squadName": { "type": "string", "description": "Saved squad name." },
+        "squadTag": { "type": "string", "description": "Saved squad tag." },
+        "squadUids": { "type": "array", "description": "Up to 4 teammate Free Fire UIDs." },
+        "lastDailySpinDate": { "type": "string", "description": "YYYY-MM-DD of last completed daily spin." },
+        "referralCode": { "type": "string", "description": "Player referral code." },
+        "walletDeposit": { "type": "integer", "description": "Verified deposit balance in INR (starts at 0)." },
+        "walletWinning": { "type": "integer", "description": "Verified winning balance in INR (starts at 0)." },
+        "lastApprovedUtr": { "type": "string", "description": "Most recently credited deposit UTR for rule validation." },
+        "lastRefundedWithdrawalId": { "type": "string", "description": "Most recently refunded rejected withdrawal request ID for rule validation." },
+        "lastRefundedTournamentId": { "type": "string", "description": "Most recently refunded cancelled tournament ID for rule validation." },
+        "trustScore": { "type": "integer", "description": "Fair-play trust score (0-100)." },
+        "kycStatus": { "type": "string", "description": "KYC verification status." },
+        "fcmToken": { "type": "string", "description": "Firebase Cloud Messaging device token for direct push alerts." },
+        "accountStatus": { "type": "string", "enum": ["active", "suspended", "banned"], "description": "Admin-controlled account moderation status." },
+        "banReason": { "type": "string", "description": "Admin-provided reason for ban or suspension." },
+        "suspendedUntil": { "type": "string", "format": "date-time", "description": "Optional suspension expiry timestamp; null means indefinite until admin review." },
+        "bannedAt": { "type": "string", "format": "date-time", "description": "Timestamp when admin applied the ban or suspension." },
+        "bannedBy": { "type": "string", "description": "Admin identifier or label that issued the restriction." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "fullName", "phone", "freeFireUid", "freeFireIgn",
+        "termsAccepted", "termsVersion", "verificationMethod",
+        "level", "xp", "points", "totalTournaments", "totalKills", "booyahs",
+        "avatarIndex", "lastDailySpinDate", "walletDeposit", "walletWinning",
+        "trustScore", "kycStatus", "createdAt", "updatedAt"
+      ]
+    },
+    "UidLock": {
+      "title": "UidLock",
+      "description": "Zero-PII Free Fire UID uniqueness registry.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "createdAt"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "Free Fire India Esports tournament listing.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "mode": { "type": "string" },
+        "mapName": { "type": "string" },
+        "dateTimeLabel": { "type": "string" },
+        "status": { "type": "string", "enum": ["upcoming", "live", "completed", "cancelled"] },
+        "entryFee": { "type": "integer" },
+        "prizePool": { "type": "integer" },
+        "perKill": { "type": "integer" },
+        "prizeFirst": { "type": "integer" },
+        "prizeSecond": { "type": "integer" },
+        "prizeThird": { "type": "integer" },
+        "maxSlots": { "type": "integer" },
+        "filledSlots": { "type": "integer" },
+        "slotUnitLabel": { "type": "string" },
+        "rulesSummary": { "type": "string" },
+        "roomId": { "type": "string" },
+        "roomPassword": { "type": "string" },
+        "roomUnlocked": { "type": "boolean" },
+        "resultsPublished": { "type": "boolean" },
+        "mvpIgn": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "title", "mode", "mapName", "dateTimeLabel", "status",
+        "entryFee", "prizePool", "perKill", "maxSlots", "filledSlots", "createdAt"
+      ]
+    },
+    "TournamentRegistration": {
+      "title": "TournamentRegistration",
+      "description": "Player's tournament slot registration and result submission.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "tournamentId": { "type": "string" },
+        "tournamentTitle": { "type": "string" },
+        "mode": { "type": "string" },
+        "mapName": { "type": "string" },
+        "dateTimeLabel": { "type": "string" },
+        "slotNumber": { "type": "integer" },
+        "captainUid": { "type": "string" },
+        "captainIgn": { "type": "string" },
+        "teammateUids": { "type": "array" },
+        "screenshotSubmitted": { "type": "boolean" },
+        "submittedKills": { "type": "integer" },
+        "screenshotUri": { "type": "string" },
+        "resultStatus": { "type": "string" },
+        "entryFeePaid": { "type": "integer" },
+        "depositPaid": { "type": "integer" },
+        "winningPaid": { "type": "integer" },
+        "refunded": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "tournamentId", "tournamentTitle", "mode", "slotNumber",
+        "captainUid", "captainIgn", "createdAt", "updatedAt"
+      ]
+    },
+    "ArenaNotification": {
+      "title": "ArenaNotification",
+      "description": "Admin-published global or targeted announcement readable by authenticated users.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "category": { "type": "string" },
+        "priority": { "type": "string" },
+        "targetUserId": { "type": "string" },
+        "linkUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "body", "createdAt"]
+    },
+    "ReadAdminNotification": {
+      "title": "ReadAdminNotification",
+      "description": "Per-user read receipt for an admin notification.",
+      "type": "object",
+      "properties": {
+        "notifId": { "type": "string" },
+        "readAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["notifId", "readAt"]
+    },
+    "WalletTransaction": {
+      "title": "WalletTransaction",
+      "description": "User-scoped wallet UI transaction preview entry.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "integer" },
+        "isCredit": { "type": "boolean" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "category", "amount", "isCredit", "status", "createdAt"]
+    },
+    "SpinHistoryEntry": {
+      "title": "SpinHistoryEntry",
+      "description": "User-scoped audit log of daily spin wheel outcomes.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "dateKey": { "type": "string" },
+        "outcomeLabel": { "type": "string" },
+        "pointsWon": { "type": "integer" },
+        "isRetry": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "dateKey", "outcomeLabel", "pointsWon", "isRetry", "createdAt"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Public zero-PII esports leaderboard ranking entry.",
+      "type": "object",
+      "properties": {
+        "ign": { "type": "string" },
+        "kills": { "type": "integer" },
+        "booyahs": { "type": "integer" },
+        "winningsInr": { "type": "integer" },
+        "avatarIndex": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ign", "kills", "booyahs", "winningsInr", "updatedAt"]
+    },
+    "UtrLock": {
+      "title": "UtrLock",
+      "description": "Zero-PII UPI UTR uniqueness lock preventing duplicate UTR reuse across any account.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "createdAt"]
+    },
+    "DepositRequest": {
+      "title": "DepositRequest",
+      "description": "UPI wallet add-money request keyed by unique normalized UTR for Admin approval.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userIgn": { "type": "string" },
+        "userPhone": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "utr": { "type": "string" },
+        "upiId": { "type": "string" },
+        "amount": { "type": "integer" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "credited": { "type": "boolean" },
+        "adminNote": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "utr", "upiId", "amount", "status", "credited", "createdAt", "updatedAt"]
+    },
+    "WithdrawalRequest": {
+      "title": "WithdrawalRequest",
+      "description": "Winning balance withdrawal request (min 50 Pts) with verified selfie for daily 10 PM payout.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "freeFireUid": { "type": "string" },
+        "freeFireIgn": { "type": "string" },
+        "userPhone": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "upiId": { "type": "string" },
+        "amount": { "type": "integer" },
+        "selfieBase64": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "paid", "rejected"] },
+        "refunded": { "type": "boolean", "description": "Whether a rejected withdrawal was already refunded to walletWinning." },
+        "adminNote": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "fullName", "freeFireUid", "upiId",
+        "amount", "selfieBase64", "status", "createdAt", "updatedAt"
+      ]
+    },
+    "TournamentResultEntry": {
+      "title": "TournamentResultEntry",
+      "description": "Admin-published Scrims / Tournament Points Table row for a completed match.",
+      "type": "object",
+      "properties": {
+        "tournamentId": { "type": "string" },
+        "rank": { "type": "integer" },
+        "playerOrTeamName": { "type": "string" },
+        "squadTag": { "type": "string" },
+        "freeFireUid": { "type": "string" },
+        "userId": { "type": "string" },
+        "slotNumber": { "type": "integer" },
+        "booyahs": { "type": "integer" },
+        "placementPoints": { "type": "integer" },
+        "kills": { "type": "integer" },
+        "killPoints": { "type": "integer" },
+        "totalPoints": { "type": "integer" },
+        "prizeWon": { "type": "integer" },
+        "isMvp": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "tournamentId", "rank", "playerOrTeamName",
+        "placementPoints", "kills", "totalPoints", "updatedAt"
+      ]
+    },
+    "TournamentParticipant": {
+      "title": "TournamentParticipant",
+      "description": "Zero-PII real joined member roster entry under a tournament.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "tournamentId": { "type": "string" },
+        "slotNumber": { "type": "integer" },
+        "captainIgn": { "type": "string" },
+        "captainUid": { "type": "string" },
+        "squadTag": { "type": "string" },
+        "avatarIndex": { "type": "integer" },
+        "teammateUids": { "type": "array" },
+        "joinedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "tournamentId", "slotNumber", "captainIgn", "captainUid", "joinedAt"
+      ]
+    },
+    "HeroBanner": {
+      "title": "HeroBanner",
+      "description": "Admin-managed home carousel promotional banner with image URL and clickable external link.",
+      "type": "object",
+      "properties": {
+        "badge": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "ctaLabel": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "linkUrl": { "type": "string" },
+        "order": { "type": "integer" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["imageUrl", "linkUrl"]
+    },
+    "WalletAppConfig": {
+      "title": "WalletAppConfig",
+      "description": "Admin-managed UPI merchant ID and deposit/withdrawal limits.",
+      "type": "object",
+      "properties": {
+        "merchantUpiId": { "type": "string" },
+        "minWithdrawalPoints": { "type": "integer" },
+        "minDepositInr": { "type": "integer" },
+        "maxDepositInr": { "type": "integer" }
+      },
+      "required": ["merchantUpiId"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Player-submitted cheater report or support ticket reviewed by TournaX moderators.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userIgn": { "type": "string" },
+        "userPhone": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "category": { "type": "string", "enum": ["cheater_report", "payment_issue", "match_issue", "general"] },
+        "suspectUid": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "resolved"] },
+        "adminNote": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "category", "suspectUid", "notes", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/PlayerProfile" },
+      "description": "Owner-only structured player profile, stats, and points."
+    },
+    "/users/{userId}/registrations/{tournamentId}": {
+      "schema": { "$ref": "#/entities/TournamentRegistration" },
+      "description": "Owner-only tournament registrations and result screenshot submissions."
+    },
+    "/users/{userId}/readAdminNotifications/{notifId}": {
+      "schema": { "$ref": "#/entities/ReadAdminNotification" },
+      "description": "Owner-only read receipts for admin broadcasts."
+    },
+    "/users/{userId}/transactions/{txId}": {
+      "schema": { "$ref": "#/entities/WalletTransaction" },
+      "description": "Owner-only wallet UI transaction preview items."
+    },
+    "/users/{userId}/spinHistory/{spinId}": {
+      "schema": { "$ref": "#/entities/SpinHistoryEntry" },
+      "description": "Owner-only daily spin wheel logs."
+    },
+    "/adminNotifications/{notifId}": {
+      "schema": { "$ref": "#/entities/ArenaNotification" },
+      "description": "Admin-only broadcasts readable by authenticated users."
+    },
+    "/banners/{bannerId}": {
+      "schema": { "$ref": "#/entities/HeroBanner" },
+      "description": "Admin-managed home screen banners readable by authenticated users."
+    },
+    "/uidLocks/{freeFireUid}": {
+      "schema": { "$ref": "#/entities/UidLock" },
+      "description": "Zero-PII Free Fire UID uniqueness registry."
+    },
+    "/tournaments/{tournamentId}": {
+      "schema": { "$ref": "#/entities/Tournament" },
+      "description": "Free Fire India tournaments readable by authenticated users with atomic slot increment rules."
+    },
+    "/tournaments/{tournamentId}/results/{entryId}": {
+      "schema": { "$ref": "#/entities/TournamentResultEntry" },
+      "description": "Admin-published Scrims / Match Points Table standings readable by authenticated users."
+    },
+    "/tournaments/{tournamentId}/participants/{participantId}": {
+      "schema": { "$ref": "#/entities/TournamentParticipant" },
+      "description": "Zero-PII real joined player/team roster readable by authenticated users."
+    },
+    "/leaderboard/{entryId}": {
+      "schema": { "$ref": "#/entities/LeaderboardEntry" },
+      "description": "Public zero-PII esports leaderboard rankings."
+    },
+    "/utrLocks/{utr}": {
+      "schema": { "$ref": "#/entities/UtrLock" },
+      "description": "Zero-PII global UTR uniqueness lock collection."
+    },
+    "/depositRequests/{utr}": {
+      "schema": { "$ref": "#/entities/DepositRequest" },
+      "description": "UPI add-money requests pending Admin Panel / Console verification."
+    },
+    "/withdrawalRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/WithdrawalRequest" },
+      "description": "Winning balance withdrawal requests (min 50 Pts) with live selfie for 10 PM host payout."
+    },
+    "/appConfig/{configId}": {
+      "schema": { "$ref": "#/entities/WalletAppConfig" },
+      "description": "Admin-managed wallet configuration such as merchant UPI ID and limits."
+    },
+    "/supportTickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "Player-submitted cheater reports and support grievance tickets."
+    }
+  }
+}

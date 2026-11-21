@@ -1,0 +1,989 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: deny all by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidFreeFireUid(uid) {
+      return uid is string && uid.matches('^[0-9]{8,12}$');
+    }
+
+    function isValidUidList(arr) {
+      return arr is list &&
+             arr.size() <= 4 &&
+             (arr.size() < 1 || isValidFreeFireUid(arr[0])) &&
+             (arr.size() < 2 || isValidFreeFireUid(arr[1])) &&
+             (arr.size() < 3 || isValidFreeFireUid(arr[2])) &&
+             (arr.size() < 4 || isValidFreeFireUid(arr[3]));
+    }
+
+    function isValidUtr(utr) {
+      return utr is string && utr.matches('^[A-Z0-9]{10,22}$');
+    }
+
+    function isValidPayoutUpi(upi) {
+      return upi is string &&
+             upi.size() >= 5 &&
+             upi.size() <= 80 &&
+             upi.matches('^[a-zA-Z0-9.\\-_]{2,64}@[a-zA-Z0-9.\\-]{2,32}$');
+    }
+
+    function getMerchantUpiId() {
+      let cfgPath = /databases/$(database)/documents/appConfig/wallet;
+      let raw = exists(cfgPath) ? get(cfgPath).data.get('merchantUpiId', '') : '';
+      return isValidPayoutUpi(raw) ? raw : '7378633612@fam';
+    }
+
+    function getMinDepositInr() {
+      let cfgPath = /databases/$(database)/documents/appConfig/wallet;
+      let raw = exists(cfgPath) ? get(cfgPath).data.get('minDepositInr', 10) : 10;
+      return (raw is int && raw >= 1 && raw <= 50000) ? raw : 10;
+    }
+
+    function getMaxDepositInr() {
+      let cfgPath = /databases/$(database)/documents/appConfig/wallet;
+      let minV = getMinDepositInr();
+      let raw = exists(cfgPath) ? get(cfgPath).data.get('maxDepositInr', 500) : 500;
+      let fallbackMax = minV > 500 ? minV : 500;
+      return (raw is int && raw >= minV && raw <= 50000) ? raw : fallbackMax;
+    }
+
+    function getMinWithdrawalPoints() {
+      let cfgPath = /databases/$(database)/documents/appConfig/wallet;
+      let raw = exists(cfgPath) ? get(cfgPath).data.get('minWithdrawalPoints', 50) : 50;
+      return (raw is int && raw >= 10 && raw <= 10000) ? raw : 50;
+    }
+
+    function isIntEq(data, key, expected) {
+      let v = data.get(key, expected);
+      return v is int && v == expected;
+    }
+
+    function isOptInt(data, key, minV, maxV) {
+      let v = data.get(key, minV);
+      return v is int && v >= minV && v <= maxV;
+    }
+
+    function isOptStr(data, key, maxLen) {
+      let v = data.get(key, '');
+      return v is string && v.size() <= maxLen;
+    }
+
+    function isValidPlayerProfile(data) {
+      return data.userId is string &&
+             data.userId == request.auth.uid &&
+             data.fullName is string &&
+             data.fullName.size() >= 3 &&
+             data.fullName.size() <= 80 &&
+             data.phone is string &&
+             data.phone.matches('^[0-9]{10}$') &&
+             isValidFreeFireUid(data.freeFireUid) &&
+             data.freeFireIgn is string &&
+             data.freeFireIgn.size() >= 2 &&
+             data.freeFireIgn.size() <= 30 &&
+             data.termsAccepted is bool &&
+             data.termsAccepted == true &&
+             data.termsVersion is string &&
+             data.termsVersion.size() >= 2 &&
+             data.termsVersion.size() <= 32 &&
+             data.verificationMethod is string &&
+             data.verificationMethod.size() >= 2 &&
+             data.verificationMethod.size() <= 40 &&
+             isOptInt(data, 'avatarIndex', 0, 3) &&
+             isOptStr(data, 'squadName', 40) &&
+             isOptStr(data, 'squadTag', 10) &&
+             (!('squadUids' in data) || isValidUidList(data.squadUids)) &&
+             isOptStr(data, 'lastDailySpinDate', 20) &&
+             isOptStr(data, 'referralCode', 24) &&
+             isOptStr(data, 'lastApprovedUtr', 32) &&
+             isOptStr(data, 'lastJoinedTournamentId', 128) &&
+             isOptStr(data, 'fcmToken', 512);
+    }
+
+    function isValidRegistration(data, userId, tournamentId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.tournamentId is string &&
+             data.tournamentId == tournamentId &&
+             data.tournamentTitle is string &&
+             data.tournamentTitle.size() >= 2 &&
+             data.tournamentTitle.size() <= 100 &&
+             data.mode is string &&
+             data.mode.size() >= 2 &&
+             data.mode.size() <= 30 &&
+             data.slotNumber is int &&
+             data.slotNumber >= 1 &&
+             data.slotNumber <= 200 &&
+             isValidFreeFireUid(data.captainUid) &&
+             data.captainIgn is string &&
+             data.captainIgn.size() >= 2 &&
+             data.captainIgn.size() <= 30 &&
+             (!('mapName' in data) || (data.mapName is string && data.mapName.size() <= 30)) &&
+             (!('dateTimeLabel' in data) || (data.dateTimeLabel is string && data.dateTimeLabel.size() <= 40)) &&
+             (!('teammateUids' in data) || isValidUidList(data.teammateUids)) &&
+             (!('screenshotSubmitted' in data) || data.screenshotSubmitted is bool) &&
+             (!('submittedKills' in data) || (data.submittedKills is int && data.submittedKills >= 0 && data.submittedKills <= 100)) &&
+             (!('screenshotUri' in data) || (data.screenshotUri is string && data.screenshotUri.size() <= 250000)) &&
+             (!('resultStatus' in data) || (data.resultStatus is string && data.resultStatus.size() <= 40)) &&
+             (!('entryFeePaid' in data) || (data.entryFeePaid is int && data.entryFeePaid >= 0 && data.entryFeePaid <= 10000)) &&
+             (!('depositPaid' in data) || (data.depositPaid is int && data.depositPaid >= 0 && data.depositPaid <= 10000)) &&
+             (!('winningPaid' in data) || (data.winningPaid is int && data.winningPaid >= 0 && data.winningPaid <= 10000)) &&
+             (!('depositPaid' in data && 'winningPaid' in data) || data.depositPaid + data.winningPaid == data.get('entryFeePaid', 0)) &&
+             (!('refunded' in data) || data.refunded is bool);
+    }
+
+    function isValidTournamentParticipant(data, participantId, tournamentId) {
+      return data.userId is string &&
+             data.userId == participantId &&
+             data.tournamentId is string &&
+             data.tournamentId == tournamentId &&
+             data.slotNumber is int &&
+             data.slotNumber >= 1 &&
+             data.slotNumber <= 200 &&
+             data.captainIgn is string &&
+             data.captainIgn.size() >= 2 &&
+             data.captainIgn.size() <= 30 &&
+             isValidFreeFireUid(data.captainUid) &&
+             (!('squadTag' in data) || (data.squadTag is string && data.squadTag.size() <= 10)) &&
+             (!('avatarIndex' in data) || (data.avatarIndex is int && data.avatarIndex >= 0 && data.avatarIndex <= 3)) &&
+             (!('teammateUids' in data) || isValidUidList(data.teammateUids));
+    }
+
+    function isValidNotification(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.title is string &&
+             data.title.size() >= 2 &&
+             data.title.size() <= 100 &&
+             data.body is string &&
+             data.body.size() >= 2 &&
+             data.body.size() <= 300 &&
+             data.isRead is bool &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 32));
+    }
+
+    function isValidTransaction(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.title is string &&
+             data.title.size() >= 2 &&
+             data.title.size() <= 120 &&
+             data.category is string &&
+             data.category.size() >= 2 &&
+             data.category.size() <= 120 &&
+             data.amount is int &&
+             data.amount >= 0 &&
+             data.amount <= 10000000 &&
+             data.isCredit is bool &&
+             data.status is string &&
+             data.status.size() >= 2 &&
+             data.status.size() <= 32;
+    }
+
+    function isBackedDepositTx(utr, data, userId) {
+      let depPath = /databases/$(database)/documents/depositRequests/$(utr);
+      return isValidUtr(utr) &&
+             exists(depPath) &&
+             get(depPath).data.userId == userId &&
+             get(depPath).data.status == 'approved' &&
+             getAfter(depPath).data.credited == true &&
+             data.isCredit == true &&
+             data.amount == get(depPath).data.amount;
+    }
+
+    function isBackedWithdrawalCreateTx(reqId, data, userId) {
+      let wdPath = /databases/$(database)/documents/withdrawalRequests/$(reqId);
+      return isValidId(reqId) &&
+             existsAfter(wdPath) &&
+             getAfter(wdPath).data.userId == userId &&
+             data.isCredit == false &&
+             data.amount == getAfter(wdPath).data.amount;
+    }
+
+    function isBackedWithdrawalRefundTx(reqId, data, userId) {
+      let wdPath = /databases/$(database)/documents/withdrawalRequests/$(reqId);
+      return isValidId(reqId) &&
+             exists(wdPath) &&
+             get(wdPath).data.userId == userId &&
+             get(wdPath).data.status == 'rejected' &&
+             getAfter(wdPath).data.get('refunded', false) == true &&
+             data.isCredit == true &&
+             data.amount == get(wdPath).data.amount;
+    }
+
+    function isBackedJoinTx(tid, data, userId) {
+      let regPath = /databases/$(database)/documents/users/$(userId)/registrations/$(tid);
+      return isValidId(tid) &&
+             existsAfter(regPath) &&
+             getAfter(regPath).data.get('entryFeePaid', 0) > 0 &&
+             data.isCredit == false &&
+             data.amount == getAfter(regPath).data.entryFeePaid;
+    }
+
+    function isBackedTournamentRefundTx(tid, data, userId) {
+      let regPath = /databases/$(database)/documents/users/$(userId)/registrations/$(tid);
+      return isValidId(tid) &&
+             exists(regPath) &&
+             get(regPath).data.get('entryFeePaid', 0) > 0 &&
+             getAfter(regPath).data.get('refunded', false) == true &&
+             data.isCredit == true &&
+             data.amount == get(regPath).data.entryFeePaid;
+    }
+
+    function isBackedUserTransaction(txId, data, userId) {
+      return !exists(/databases/$(database)/documents/users/$(userId)/transactions/$(txId)) &&
+             (
+               (txId.matches('^dep_[A-Z0-9]{10,22}$') && isBackedDepositTx(txId[4:txId.size()], data, userId)) ||
+               (txId.matches('^tx_[a-zA-Z0-9_\\-]+$') && isBackedWithdrawalCreateTx(txId[3:txId.size()], data, userId)) ||
+               (txId.matches('^wd_refund_[a-zA-Z0-9_\\-]+$') && isBackedWithdrawalRefundTx(txId[10:txId.size()], data, userId)) ||
+               (txId.matches('^join_[a-zA-Z0-9_\\-]+$') && isBackedJoinTx(txId[5:txId.size()], data, userId)) ||
+               (txId.matches('^refund_[a-zA-Z0-9_\\-]+$') && isBackedTournamentRefundTx(txId[7:txId.size()], data, userId))
+             );
+    }
+
+    function isValidTournament(data) {
+      return data.title is string &&
+             data.title.size() >= 3 &&
+             data.title.size() <= 100 &&
+             data.mode is string &&
+             data.mode.size() >= 2 &&
+             data.mode.size() <= 30 &&
+             data.mapName is string &&
+             data.mapName.size() >= 2 &&
+             data.mapName.size() <= 30 &&
+             data.dateTimeLabel is string &&
+             data.dateTimeLabel.size() >= 2 &&
+             data.dateTimeLabel.size() <= 50 &&
+             data.status in ['upcoming', 'live', 'completed', 'cancelled'] &&
+             data.entryFee is int && data.entryFee >= 0 && data.entryFee <= 10000 &&
+             data.prizePool is int && data.prizePool >= 0 && data.prizePool <= 1000000 &&
+             data.perKill is int && data.perKill >= 0 && data.perKill <= 1000 &&
+             data.maxSlots is int && data.maxSlots >= 2 && data.maxSlots <= 200 &&
+             data.filledSlots is int && data.filledSlots >= 0 && data.filledSlots <= data.maxSlots &&
+             (!('prizeFirst' in data) || (data.prizeFirst is int && data.prizeFirst >= 0)) &&
+             (!('prizeSecond' in data) || (data.prizeSecond is int && data.prizeSecond >= 0)) &&
+             (!('prizeThird' in data) || (data.prizeThird is int && data.prizeThird >= 0)) &&
+             (!('slotUnitLabel' in data) || (data.slotUnitLabel is string && data.slotUnitLabel.size() <= 20)) &&
+             (!('rulesSummary' in data) || (data.rulesSummary is string && data.rulesSummary.size() <= 500)) &&
+             (!('roomId' in data) || (data.roomId is string && data.roomId.size() <= 32)) &&
+             (!('roomPassword' in data) || (data.roomPassword is string && data.roomPassword.size() <= 32)) &&
+             (!('roomUnlocked' in data) || data.roomUnlocked is bool) &&
+             (!('resultsPublished' in data) || data.resultsPublished is bool) &&
+             (!('mvpIgn' in data) || (data.mvpIgn is string && data.mvpIgn.size() <= 40));
+    }
+
+    function isValidLeaderboardEntry(data) {
+      return data.ign is string &&
+             data.ign.size() >= 2 &&
+             data.ign.size() <= 30 &&
+             data.kills is int && data.kills >= 0 && data.kills <= 1000000 &&
+             data.booyahs is int && data.booyahs >= 0 && data.booyahs <= 100000 &&
+             data.winningsInr is int && data.winningsInr >= 0 && data.winningsInr <= 10000000 &&
+             (!('avatarIndex' in data) || (data.avatarIndex is int && data.avatarIndex >= 0 && data.avatarIndex <= 3));
+    }
+
+    function isValidDepositRequest(data, utr, enforceLiveLimits) {
+      return data.userId is string &&
+             data.userId == request.auth.uid &&
+             isValidUtr(utr) &&
+             data.utr is string &&
+             data.utr == utr &&
+             isValidPayoutUpi(data.upiId) &&
+             (!enforceLiveLimits || data.upiId == getMerchantUpiId()) &&
+             data.amount is int &&
+             data.amount >= 1 &&
+             data.amount <= 50000 &&
+             (!enforceLiveLimits || (data.amount >= getMinDepositInr() && data.amount <= getMaxDepositInr())) &&
+             data.status is string &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             data.credited is bool &&
+             (!('userIgn' in data) || (data.userIgn is string && data.userIgn.size() <= 40)) &&
+             (!('userPhone' in data) || (data.userPhone is string && data.userPhone.size() <= 20)) &&
+             (!('userEmail' in data) || (data.userEmail is string && data.userEmail.size() <= 120)) &&
+             (!('adminNote' in data) || (data.adminNote is string && data.adminNote.size() <= 300));
+    }
+
+    function isValidWithdrawalRequest(data, requestId, enforceMinLimit) {
+      return data.userId is string &&
+             data.userId == request.auth.uid &&
+             isValidId(requestId) &&
+             data.fullName is string &&
+             data.fullName.size() >= 3 &&
+             data.fullName.size() <= 80 &&
+             isValidFreeFireUid(data.freeFireUid) &&
+             isValidPayoutUpi(data.upiId) &&
+             data.amount is int &&
+             data.amount >= 1 &&
+             data.amount <= 10000000 &&
+             (!enforceMinLimit || data.amount >= getMinWithdrawalPoints()) &&
+             data.selfieBase64 is string &&
+             data.selfieBase64.size() >= 100 &&
+             data.selfieBase64.size() <= 350000 &&
+             data.status is string &&
+             data.status in ['pending', 'paid', 'rejected'] &&
+             (!('refunded' in data) || data.refunded is bool) &&
+             (!('freeFireIgn' in data) || (data.freeFireIgn is string && data.freeFireIgn.size() <= 30)) &&
+             (!('userPhone' in data) || (data.userPhone is string && data.userPhone.size() <= 20)) &&
+             (!('userEmail' in data) || (data.userEmail is string && data.userEmail.size() <= 120)) &&
+             (!('adminNote' in data) || (data.adminNote is string && data.adminNote.size() <= 300));
+    }
+
+    function isDepositFieldsApproved(userId, depPath, dep) {
+      return dep.userId == userId &&
+             dep.status == 'approved' &&
+             dep.credited == false &&
+             dep.amount is int &&
+             dep.amount >= 1 &&
+             dep.amount <= 50000 &&
+             getAfter(depPath).data.credited == true &&
+             request.resource.data.walletDeposit == resource.data.get('walletDeposit', 0) + dep.amount;
+    }
+
+    function isDepositDocApproved(userId, depPath) {
+      return exists(depPath) &&
+             isDepositFieldsApproved(userId, depPath, get(depPath).data);
+    }
+
+    function isValidDepositClaim(userId) {
+      let utr = incoming().get('lastApprovedUtr', '');
+      return isValidUtr(utr) &&
+             utr != existing().get('lastApprovedUtr', '') &&
+             isDepositDocApproved(userId, /databases/$(database)/documents/depositRequests/$(utr));
+    }
+
+    function isWithdrawalFieldsRefundable(userId, wdPath, wd) {
+      return wd.userId == userId &&
+             wd.status == 'rejected' &&
+             wd.get('refunded', false) == false &&
+             getAfter(wdPath).data.get('refunded', false) == true &&
+             wd.amount is int &&
+             wd.amount >= 1 &&
+             wd.amount <= 10000000 &&
+             request.resource.data.walletWinning == resource.data.get('walletWinning', 0) + wd.amount;
+    }
+
+    function isWithdrawalDocRefundable(userId, wdPath) {
+      return exists(wdPath) &&
+             isWithdrawalFieldsRefundable(userId, wdPath, get(wdPath).data);
+    }
+
+    function isValidWithdrawalRefundClaim(userId) {
+      let wdId = incoming().get('lastRefundedWithdrawalId', '');
+      return isValidId(wdId) &&
+             wdId != existing().get('lastRefundedWithdrawalId', '') &&
+             isWithdrawalDocRefundable(userId, /databases/$(database)/documents/withdrawalRequests/$(wdId));
+    }
+
+    function isRegRefundable(regPath, reg, ch) {
+      let hasBucketSplit = ('depositPaid' in reg) && ('winningPaid' in reg) &&
+                           reg.depositPaid is int && reg.winningPaid is int &&
+                           reg.depositPaid >= 0 && reg.winningPaid >= 0 &&
+                           (reg.depositPaid + reg.winningPaid == reg.entryFeePaid);
+      let refundDep = hasBucketSplit ? reg.depositPaid : reg.entryFeePaid;
+      let refundWin = hasBucketSplit ? reg.winningPaid : 0;
+      return reg.get('refunded', false) == false &&
+             reg.get('entryFeePaid', 0) is int &&
+             reg.get('entryFeePaid', 0) > 0 &&
+             getAfter(regPath).data.get('refunded', false) == true &&
+             request.resource.data.get('walletDeposit', 0) == resource.data.get('walletDeposit', 0) + refundDep &&
+             request.resource.data.get('walletWinning', 0) == resource.data.get('walletWinning', 0) + refundWin &&
+             (!('totalTournaments' in ch) || (incoming().totalTournaments is int && incoming().totalTournaments >= 0 && incoming().totalTournaments <= existing().get('totalTournaments', 0))) &&
+             (!('xp' in ch) || (incoming().xp is int && incoming().xp >= 0 && incoming().xp <= existing().get('xp', 0))) &&
+             (!('level' in ch) || (incoming().level is int && incoming().level >= 1 && incoming().level <= existing().get('level', 1)));
+    }
+
+    function isCancelledTournamentRefundClaim(userId, ch) {
+      let tid = incoming().get('lastRefundedTournamentId', '');
+      let tournPath = /databases/$(database)/documents/tournaments/$(tid);
+      let regPath = /databases/$(database)/documents/users/$(userId)/registrations/$(tid);
+      return isValidId(tid) &&
+             tid != existing().get('lastRefundedTournamentId', '') &&
+             exists(tournPath) &&
+             get(tournPath).data.status == 'cancelled' &&
+             exists(regPath) &&
+             isRegRefundable(regPath, get(regPath).data, ch);
+    }
+
+    function matchesVerifiedUserStats(userId) {
+      let u = get(/databases/$(database)/documents/users/$(userId)).data;
+      return incoming().ign == u.freeFireIgn &&
+             incoming().kills == u.get('totalKills', 0) &&
+             incoming().booyahs == u.get('booyahs', 0) &&
+             incoming().winningsInr == u.get('walletWinning', 0);
+    }
+
+    function isUserRestricted(data) {
+      let st = data.get('accountStatus', 'active');
+      return st == 'banned' ||
+             (st == 'suspended' &&
+              (data.get('suspendedUntil', null) == null || request.time < data.suspendedUntil));
+    }
+
+    function isCallerActive() {
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return !exists(userPath) || !isUserRestricted(get(userPath).data);
+    }
+
+    function isValidUpdatedIdentityAndMeta(req, ch) {
+      return (!('fullName' in ch) || (req.fullName is string && req.fullName.size() >= 3 && req.fullName.size() <= 80)) &&
+             (!('phone' in ch) || (req.phone is string && req.phone.matches('^[0-9]{10}$'))) &&
+             (!('freeFireIgn' in ch) || (req.freeFireIgn is string && req.freeFireIgn.size() >= 2 && req.freeFireIgn.size() <= 30)) &&
+             (!('squadName' in ch) || (req.squadName is string && req.squadName.size() <= 40)) &&
+             (!('squadTag' in ch) || (req.squadTag is string && req.squadTag.size() <= 10)) &&
+             (!('squadUids' in ch) || isValidUidList(req.squadUids)) &&
+             (!('lastDailySpinDate' in ch) || (req.lastDailySpinDate is string && req.lastDailySpinDate.size() <= 20)) &&
+             (!('lastDailySpinAt' in ch) || req.lastDailySpinAt == null || req.lastDailySpinAt is timestamp) &&
+             (!('referralCode' in ch) || (req.referralCode is string && req.referralCode.size() <= 24)) &&
+             (!('lastJoinedTournamentId' in ch) || (req.lastJoinedTournamentId is string && req.lastJoinedTournamentId.size() <= 128)) &&
+             (!('kycStatus' in ch) || (req.kycStatus is string && req.kycStatus in ['Pending', 'Verified', 'Under Review'])) &&
+             (!('fcmToken' in ch) || (req.fcmToken is string && req.fcmToken.size() <= 512)) &&
+             (!('avatarIndex' in ch) || (req.avatarIndex is int && req.avatarIndex >= 0 && req.avatarIndex <= 3));
+    }
+
+    function isValidUpdatedBalancesAndStats(req, ch) {
+      return (!('walletDeposit' in ch) || (req.walletDeposit is int && req.walletDeposit >= 0 && req.walletDeposit <= 10000000)) &&
+             (!('walletWinning' in ch) || (req.walletWinning is int && req.walletWinning >= 0 && req.walletWinning <= 10000000)) &&
+             (!('points' in ch) || (req.points is int && req.points >= 0 && req.points <= 1000000)) &&
+             (!('xp' in ch) || (req.xp is int && req.xp >= 0 && req.xp <= 1000000)) &&
+             (!('level' in ch) || (req.level is int && req.level >= 1 && req.level <= 999)) &&
+             (!('totalTournaments' in ch) || (req.totalTournaments is int && req.totalTournaments >= 0 && req.totalTournaments <= 100000)) &&
+             (!('totalKills' in ch) || (req.totalKills is int && req.totalKills >= 0 && req.totalKills <= 1000000)) &&
+             (!('booyahs' in ch) || (req.booyahs is int && req.booyahs >= 0 && req.booyahs <= 100000)) &&
+             (!('trustScore' in ch) || (req.trustScore is int && req.trustScore >= 0 && req.trustScore <= 100));
+    }
+
+    function hasValidJoinOrUnchangedStats(userId, ch, req, prev) {
+      let prevTournaments = prev.get('totalTournaments', 0);
+      let reqTournaments = req.get('totalTournaments', prevTournaments);
+      let prevXp = prev.get('xp', 0);
+      let reqXp = req.get('xp', prevXp);
+      let prevLevel = prev.get('level', 1);
+      let reqLevel = req.get('level', prevLevel);
+      let joinedTid = req.get('lastJoinedTournamentId', '');
+      return (
+               !('lastJoinedTournamentId' in ch) &&
+               reqTournaments == prevTournaments &&
+               reqXp == prevXp &&
+               reqLevel == prevLevel
+             ) || (
+               ('lastJoinedTournamentId' in ch) &&
+               isValidId(joinedTid) &&
+               joinedTid != prev.get('lastJoinedTournamentId', '') &&
+               !exists(/databases/$(database)/documents/users/$(userId)/registrations/$(joinedTid)) &&
+               existsAfter(/databases/$(database)/documents/users/$(userId)/registrations/$(joinedTid)) &&
+               reqTournaments == prevTournaments + 1 &&
+               reqXp == prevXp + 50 &&
+               reqLevel == (reqXp / 500) + 1
+             );
+    }
+
+    function canUpdateBaseUserProfile(userId, ch) {
+      let req = request.resource.data;
+      let prev = resource.data;
+      return ch.hasOnly([
+               'fullName', 'phone', 'freeFireIgn',
+               'level', 'xp', 'totalTournaments',
+               'totalKills', 'booyahs', 'avatarIndex',
+               'squadName', 'squadTag', 'squadUids',
+               'referralCode', 'lastJoinedTournamentId',
+               'walletDeposit', 'walletWinning',
+               'fcmToken', 'updatedAt'
+             ]) &&
+             req.get('walletWinning', 0) <= prev.get('walletWinning', 0) &&
+             req.get('totalKills', 0) <= prev.get('totalKills', 0) &&
+             req.get('booyahs', 0) <= prev.get('booyahs', 0) &&
+             req.get('walletDeposit', 0) <= prev.get('walletDeposit', 0) &&
+             hasValidJoinOrUnchangedStats(userId, ch, req, prev) &&
+             isValidUpdatedIdentityAndMeta(req, ch) &&
+             isValidUpdatedBalancesAndStats(req, ch);
+    }
+
+    function canUpdateUserPayload(userId) {
+      let ch = incoming().diff(existing()).affectedKeys();
+      return 'lastApprovedUtr' in ch
+               ? (ch.hasOnly(['walletDeposit', 'lastApprovedUtr', 'updatedAt']) &&
+                  isOptInt(incoming(), 'walletDeposit', 0, 10000000) &&
+                  isValidDepositClaim(userId))
+               : ('lastRefundedWithdrawalId' in ch
+                   ? (ch.hasOnly(['walletWinning', 'lastRefundedWithdrawalId', 'updatedAt']) &&
+                      isOptInt(incoming(), 'walletWinning', 0, 10000000) &&
+                      isValidWithdrawalRefundClaim(userId))
+                   : ('lastRefundedTournamentId' in ch
+                       ? (ch.hasOnly(['walletDeposit', 'walletWinning', 'totalTournaments', 'xp', 'level', 'lastRefundedTournamentId', 'updatedAt']) &&
+                          isOptInt(incoming(), 'walletDeposit', 0, 10000000) &&
+                          isOptInt(incoming(), 'walletWinning', 0, 10000000) &&
+                          isCancelledTournamentRefundClaim(userId, ch))
+                       : canUpdateBaseUserProfile(userId, ch)));
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().keys().hasAll([
+                         'userId', 'fullName', 'phone', 'freeFireUid',
+                         'freeFireIgn', 'termsAccepted', 'termsVersion',
+                         'verificationMethod', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'fullName', 'phone', 'freeFireUid',
+                         'freeFireIgn', 'termsAccepted', 'termsVersion',
+                         'verificationMethod', 'level', 'xp', 'points',
+                         'totalTournaments', 'totalKills', 'booyahs', 'avatarIndex',
+                         'squadName', 'squadTag', 'squadUids', 'lastDailySpinDate',
+                         'lastDailySpinAt', 'referralCode', 'walletDeposit', 'walletWinning',
+                         'lastApprovedUtr', 'lastRefundedWithdrawalId', 'lastRefundedTournamentId',
+                         'lastJoinedTournamentId', 'trustScore', 'kycStatus', 'fcmToken',
+                         'accountStatus', 'banReason', 'suspendedUntil', 'bannedAt', 'bannedBy',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isIntEq(incoming(), 'points', 0) &&
+                       isIntEq(incoming(), 'xp', 0) &&
+                       isIntEq(incoming(), 'level', 1) &&
+                       isIntEq(incoming(), 'totalTournaments', 0) &&
+                       isIntEq(incoming(), 'totalKills', 0) &&
+                       isIntEq(incoming(), 'booyahs', 0) &&
+                       isIntEq(incoming(), 'trustScore', 100) &&
+                       incoming().get('kycStatus', 'Pending') == 'Pending' &&
+                       isIntEq(incoming(), 'walletDeposit', 0) &&
+                       isIntEq(incoming(), 'walletWinning', 0) &&
+                       incoming().get('lastRefundedWithdrawalId', '') == '' &&
+                       incoming().get('lastRefundedTournamentId', '') == '' &&
+                       incoming().get('lastJoinedTournamentId', '') == '' &&
+                       incoming().get('lastDailySpinAt', null) == null &&
+                       incoming().get('accountStatus', 'active') == 'active' &&
+                       incoming().get('banReason', '') == '' &&
+                       incoming().get('suspendedUntil', null) == null &&
+                       incoming().get('bannedAt', null) == null &&
+                       incoming().get('bannedBy', '') == '' &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       isValidPlayerProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       !isUserRestricted(existing()) &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       canUpdateUserPayload(userId);
+
+      allow delete: if false;
+
+      match /registrations/{tournamentId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isCallerActive() &&
+                         isValidId(tournamentId) &&
+                         request.auth.uid == userId &&
+                         incoming().createdAt is timestamp &&
+                         incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp &&
+                         incoming().updatedAt <= request.time &&
+                         (!('refunded' in incoming()) || incoming().refunded == false) &&
+                         ('entryFeePaid' in incoming()) &&
+                         ('depositPaid' in incoming()) &&
+                         ('winningPaid' in incoming()) &&
+                         exists(/databases/$(database)/documents/tournaments/$(tournamentId)) &&
+                         exists(/databases/$(database)/documents/users/$(userId)) &&
+                         get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.status in ['upcoming', 'live'] &&
+                         get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.filledSlots < get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.maxSlots &&
+                         incoming().entryFeePaid == get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.entryFee &&
+                         incoming().depositPaid >= 0 &&
+                         incoming().winningPaid >= 0 &&
+                         (incoming().depositPaid + incoming().winningPaid == incoming().entryFeePaid) &&
+                         incoming().slotNumber == get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.filledSlots + 1 &&
+                         getAfter(/databases/$(database)/documents/tournaments/$(tournamentId)).data.filledSlots ==
+                           get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.filledSlots + 1 &&
+                         getAfter(/databases/$(database)/documents/users/$(userId)).data.get('walletDeposit', 0) ==
+                           get(/databases/$(database)/documents/users/$(userId)).data.get('walletDeposit', 0) - incoming().depositPaid &&
+                         getAfter(/databases/$(database)/documents/users/$(userId)).data.get('walletWinning', 0) ==
+                           get(/databases/$(database)/documents/users/$(userId)).data.get('walletWinning', 0) - incoming().winningPaid &&
+                         isValidRegistration(incoming(), userId, tournamentId);
+
+        allow update: if isSignedIn() &&
+                         isCallerActive() &&
+                         isValidId(tournamentId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().tournamentId == existing().tournamentId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp &&
+                         incoming().updatedAt <= request.time &&
+                         isValidRegistration(incoming(), userId, tournamentId) &&
+                         (
+                           (
+                             existing().get('refunded', false) == false &&
+                             exists(/databases/$(database)/documents/tournaments/$(tournamentId)) &&
+                             get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.status in ['live', 'completed'] &&
+                             incoming().diff(existing()).affectedKeys().hasOnly([
+                               'screenshotSubmitted', 'submittedKills', 'screenshotUri',
+                               'resultStatus', 'updatedAt'
+                             ])
+                           ) ||
+                           (
+                             existing().get('refunded', false) == false &&
+                             incoming().refunded == true &&
+                             existing().get('entryFeePaid', 0) > 0 &&
+                             exists(/databases/$(database)/documents/tournaments/$(tournamentId)) &&
+                             get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.status == 'cancelled' &&
+                             incoming().diff(existing()).affectedKeys().hasOnly([
+                               'refunded', 'resultStatus', 'updatedAt'
+                             ])
+                           )
+                         );
+
+        allow delete: if false;
+      }
+
+      match /notifications/{notifId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isCallerActive() &&
+                         isValidId(notifId) &&
+                         request.auth.uid == userId &&
+                         incoming().createdAt is timestamp &&
+                         incoming().createdAt <= request.time &&
+                         isValidNotification(incoming(), userId);
+
+        allow update: if isSignedIn() &&
+                         isCallerActive() &&
+                         isValidId(notifId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidNotification(incoming(), userId) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+
+        allow delete: if isSignedIn() && isCallerActive() && request.auth.uid == userId;
+      }
+
+      match /transactions/{txId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isCallerActive() &&
+                         isValidId(txId) &&
+                         request.auth.uid == userId &&
+                         incoming().createdAt is timestamp &&
+                         incoming().createdAt <= request.time &&
+                         isValidTransaction(incoming(), userId) &&
+                         isBackedUserTransaction(txId, incoming(), userId);
+
+        allow update: if false;
+        allow delete: if false;
+      }
+
+      match /readAdminNotifications/{notifId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create, update: if isSignedIn() &&
+                                 isCallerActive() &&
+                                 isValidId(notifId) &&
+                                 request.auth.uid == userId &&
+                                 incoming().notifId is string &&
+                                 incoming().notifId == notifId &&
+                                 incoming().readAt is timestamp &&
+                                 incoming().readAt <= request.time;
+
+        allow delete: if isSignedIn() && isCallerActive() && request.auth.uid == userId;
+      }
+
+      match /spinHistory/{spinId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /uidLocks/{freeFireUid} {
+      allow get: if isSignedIn() && isValidFreeFireUid(freeFireUid);
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isCallerActive() &&
+                       isValidFreeFireUid(freeFireUid) &&
+                       incoming().keys().hasAll(['userId', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'createdAt']) &&
+                       incoming().userId is string &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       !exists(/databases/$(database)/documents/uidLocks/$(freeFireUid));
+
+      allow update: if false;
+
+      allow delete: if false;
+    }
+
+    match /tournaments/{tournamentId} {
+      allow get: if isSignedIn() && isValidId(tournamentId);
+      allow list: if isSignedIn();
+
+      allow create: if false;
+
+      allow update: if isSignedIn() &&
+                       isCallerActive() &&
+                       isValidId(tournamentId) &&
+                       existing().status in ['upcoming', 'live'] &&
+                       isValidTournament(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['filledSlots']) &&
+                       incoming().filledSlots == existing().filledSlots + 1 &&
+                       incoming().filledSlots <= existing().maxSlots &&
+                       !exists(/databases/$(database)/documents/users/$(request.auth.uid)/registrations/$(tournamentId)) &&
+                       existsAfter(/databases/$(database)/documents/users/$(request.auth.uid)/registrations/$(tournamentId));
+
+      allow delete: if false;
+
+      match /results/{entryId} {
+        allow get: if isSignedIn() && isValidId(tournamentId) && isValidId(entryId);
+        allow list: if isSignedIn() && isValidId(tournamentId);
+        allow create, update, delete: if false;
+      }
+
+      match /participants/{participantId} {
+        allow get: if isSignedIn() && isValidId(tournamentId) && isValidId(participantId);
+        allow list: if isSignedIn() && isValidId(tournamentId);
+        allow create: if isSignedIn() &&
+                         isCallerActive() &&
+                         isValidId(tournamentId) &&
+                         participantId == request.auth.uid &&
+                         incoming().joinedAt is timestamp &&
+                         incoming().joinedAt <= request.time &&
+                         exists(/databases/$(database)/documents/tournaments/$(tournamentId)) &&
+                         get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.status in ['upcoming', 'live', 'completed'] &&
+                         existsAfter(/databases/$(database)/documents/users/$(participantId)/registrations/$(tournamentId)) &&
+                         getAfter(/databases/$(database)/documents/users/$(participantId)/registrations/$(tournamentId)).data.slotNumber == incoming().slotNumber &&
+                         getAfter(/databases/$(database)/documents/users/$(participantId)/registrations/$(tournamentId)).data.captainUid == incoming().captainUid &&
+                         isValidTournamentParticipant(incoming(), participantId, tournamentId);
+        allow update: if isSignedIn() &&
+                         isCallerActive() &&
+                         isValidId(tournamentId) &&
+                         participantId == request.auth.uid &&
+                         incoming().userId == existing().userId &&
+                         incoming().tournamentId == existing().tournamentId &&
+                         incoming().slotNumber == existing().slotNumber &&
+                         incoming().captainUid == existing().captainUid &&
+                         (!('joinedAt' in existing()) || incoming().joinedAt == existing().joinedAt) &&
+                         exists(/databases/$(database)/documents/tournaments/$(tournamentId)) &&
+                         get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.status in ['upcoming', 'live'] &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'captainIgn', 'squadTag', 'avatarIndex', 'teammateUids'
+                         ]) &&
+                         isValidTournamentParticipant(incoming(), participantId, tournamentId);
+        allow delete: if false;
+      }
+    }
+
+    match /adminNotifications/{notifId} {
+      allow get: if isSignedIn() && isValidId(notifId);
+      allow list: if isSignedIn();
+      allow create, update, delete: if false;
+    }
+
+    match /banners/{bannerId} {
+      allow get: if isSignedIn() && isValidId(bannerId);
+      allow list: if isSignedIn();
+      allow create, update, delete: if false;
+    }
+
+    match /leaderboard/{entryId} {
+      allow get: if isSignedIn() && isValidId(entryId);
+      allow list: if isSignedIn();
+
+      allow create, update: if isSignedIn() &&
+                               isCallerActive() &&
+                               isValidId(entryId) &&
+                               entryId == request.auth.uid &&
+                               exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                               incoming().updatedAt is timestamp &&
+                               incoming().updatedAt <= request.time &&
+                               isValidLeaderboardEntry(incoming()) &&
+                               matchesVerifiedUserStats(request.auth.uid);
+
+      allow delete: if false;
+    }
+
+    match /utrLocks/{utr} {
+      allow get: if isSignedIn() && isValidUtr(utr);
+      allow list: if false;
+
+      allow create: if isSignedIn() &&
+                       isCallerActive() &&
+                       isValidUtr(utr) &&
+                       incoming().keys().hasAll(['userId', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'createdAt']) &&
+                       incoming().userId is string &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       !exists(/databases/$(database)/documents/utrLocks/$(utr));
+
+      allow update, delete: if false;
+    }
+
+    match /appConfig/{configId} {
+      allow get: if isSignedIn() && isValidId(configId);
+      allow list, create, update, delete: if false;
+    }
+
+    match /depositRequests/{utr} {
+      allow get: if isSignedIn() &&
+                    isValidUtr(utr) &&
+                    (resource == null || existing().userId == request.auth.uid);
+
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                       isCallerActive() &&
+                       isValidUtr(utr) &&
+                       incoming().status == 'pending' &&
+                       incoming().credited == false &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       isValidDepositRequest(incoming(), utr, true) &&
+                       !exists(/databases/$(database)/documents/depositRequests/$(utr)) &&
+                       !exists(/databases/$(database)/documents/utrLocks/$(utr));
+
+      allow update: if isSignedIn() &&
+                       isCallerActive() &&
+                       isValidUtr(utr) &&
+                       existing().userId == request.auth.uid &&
+                       incoming().userId == existing().userId &&
+                       incoming().utr == existing().utr &&
+                       (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt) &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       (
+                         (
+                           existing().status == 'approved' &&
+                           existing().credited == false &&
+                           incoming().credited == true &&
+                           incoming().upiId == existing().upiId &&
+                           incoming().amount == existing().amount &&
+                           incoming().status == existing().status &&
+                           isValidDepositRequest(incoming(), utr, false) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['credited', 'updatedAt'])
+                         ) ||
+                         (
+                           existing().status == 'rejected' &&
+                           incoming().status == 'pending' &&
+                           incoming().credited == false &&
+                           isValidDepositRequest(incoming(), utr, true) &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'upiId', 'amount', 'status', 'credited', 'adminNote',
+                             'userIgn', 'userPhone', 'userEmail', 'updatedAt'
+                           ])
+                         )
+                       );
+
+      allow delete: if false;
+    }
+
+    match /withdrawalRequests/{requestId} {
+      allow get: if isSignedIn() &&
+                    isValidId(requestId) &&
+                    (resource == null || existing().userId == request.auth.uid);
+
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                       isValidId(requestId) &&
+                       incoming().status == 'pending' &&
+                       (!('refunded' in incoming()) || incoming().refunded == false) &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       isValidWithdrawalRequest(incoming(), requestId, true) &&
+                       !exists(/databases/$(database)/documents/withdrawalRequests/$(requestId)) &&
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                       !isUserRestricted(get(/databases/$(database)/documents/users/$(request.auth.uid)).data) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('walletWinning', 0) >= incoming().amount &&
+                       getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('walletWinning', 0) ==
+                         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('walletWinning', 0) - incoming().amount;
+
+      allow update: if isSignedIn() &&
+                       isCallerActive() &&
+                       isValidId(requestId) &&
+                       existing().userId == request.auth.uid &&
+                       existing().status == 'rejected' &&
+                       existing().get('refunded', false) == false &&
+                       incoming().refunded == true &&
+                       incoming().userId == existing().userId &&
+                       incoming().fullName == existing().fullName &&
+                       incoming().freeFireUid == existing().freeFireUid &&
+                       incoming().upiId == existing().upiId &&
+                       incoming().amount == existing().amount &&
+                       incoming().selfieBase64 == existing().selfieBase64 &&
+                       incoming().status == existing().status &&
+                       (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt) &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       isValidWithdrawalRequest(incoming(), requestId, false) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['refunded', 'updatedAt']);
+
+      allow delete: if false;
+    }
+
+    match /supportTickets/{ticketId} {
+      allow get: if isSignedIn() &&
+                    isValidId(ticketId) &&
+                    (resource == null || existing().userId == request.auth.uid);
+
+      allow list: if isSignedIn() && existing().userId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                       isCallerActive() &&
+                       isValidId(ticketId) &&
+                       incoming().userId is string &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().category is string &&
+                       incoming().category in ['cheater_report', 'payment_issue', 'match_issue', 'general'] &&
+                       incoming().suspectUid is string &&
+                       (incoming().suspectUid == '' || isValidFreeFireUid(incoming().suspectUid)) &&
+                       incoming().notes is string &&
+                       incoming().notes.size() >= 5 &&
+                       incoming().notes.size() <= 500 &&
+                       incoming().status is string &&
+                       incoming().status == 'pending' &&
+                       isOptStr(incoming(), 'userIgn', 40) &&
+                       isOptStr(incoming(), 'userPhone', 20) &&
+                       isOptStr(incoming(), 'userEmail', 120) &&
+                       isOptStr(incoming(), 'adminNote', 300) &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp &&
+                       incoming().updatedAt <= request.time &&
+                       !exists(/databases/$(database)/documents/supportTickets/$(ticketId));
+
+      allow update, delete: if false;
+    }
+  }
+}
